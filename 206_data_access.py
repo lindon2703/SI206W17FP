@@ -43,7 +43,7 @@ cur.execute('DROP TABLE IF EXISTS Movies')
 cur.execute("CREATE TABLE Movies(Title TEXT PRIMARY KEY, actors TEXT, year TEXT, language TEXT, ratings INTEGER, score INTEGER)")
 
 cur.execute('DROP TABLE IF EXISTS ActorsTweet')
-cur.execute("CREATE TABLE ActorsTweet(user_id INT PRIMARY KEY, screen_name TEXT, favourites_count INTEGER, description TEXT)")
+cur.execute("CREATE TABLE ActorsTweet(user_id INT , movietitel TEXT, screen_name TEXT, favourites_count INTEGER, description TEXT)")
 
 ##### CLASS, FUNCTION SETUP CODE:
 
@@ -85,7 +85,7 @@ class MoviesInstance():  #Though the class might be somewhat confusing, it helps
 class CompanyEncoder(json.JSONEncoder):
 	def default(self, obj):
 		if isinstance(obj, ProductionCompany):
-			return [obj.CompanyName, obj.Movies, obj.Actorslist, obj.Websiteurl]
+			return [obj.Movies, obj.Actorslist, obj.Websiteurl]
 		#Let the base class default method raise the TypeError
 		return json.JSONEncoder.default(self, obj)
 class MoviesEncoder(json.JSONEncoder):
@@ -169,12 +169,19 @@ def interactive_data_access(complist, movlist, diction):
 		else:
 			complist.append(ProductionCompany(kk))
 		cacheomdbresponse(complist, movlist, diction)
+		print ("Done processing data, please enter a VALID and NON-REPETITIVE movie title to continue scraping data")
+		print ("The program does NOT equip with an error handling mechanism, so please reopen it when crashes")
+		print ("Enter 'quit' to quit the program, as usual :D")
 		userinput_movie= input()
 
+def processactortweets(actorlist, diction):
 
-def dbloaddata(complist, movlist, diction):
+
+
+def dbloaddata(complist, movlist, dbcursor):
 	"""
 	"""
+
 	
 
 
@@ -184,7 +191,13 @@ def dbloaddata(complist, movlist, diction):
 ################ BEGIN IMPL CODE
 companysearched= []
 moviessearched= []
+actorssearched= []
 interactive_data_access(companysearched, moviessearched, CACHE_DICTION)
+for every_movie in moviessearched:
+	actorssearched+= every_movie.actors
+processactortweets(actorssearched, CACHE_DICTION)
+
+dbloaddata(companysearched, moviessearched, cur)
 
 # for x in list(CACHE_DICTION.values()): # every x should be in a ProductionCompany instance
 # 	dbcompanyloadresponse(x, cur)
