@@ -37,13 +37,13 @@ api = tweepy.API(auth, parser=tweepy.parsers.JSONParser())
 conn = sqlite3.connect('si206fp.db')
 cur = conn.cursor()
 cur.execute('DROP TABLE IF EXISTS Company')
-cur.execute("CREATE TABLE Company(CompanyName TEXT PRIMARY KEY, Movielist TEXT, Actors TEXT,  Website TEXT)")
+cur.execute("CREATE TABLE Company(CompanyName TEXT PRIMARY KEY, Movielist BLOB, Actors TEXT)")
 
 cur.execute('DROP TABLE IF EXISTS Movies')
 cur.execute("CREATE TABLE Movies(Title TEXT PRIMARY KEY, actors TEXT, year TEXT, language TEXT, ratings INTEGER, score INTEGER)")
 
 cur.execute('DROP TABLE IF EXISTS ActorsTweet')
-cur.execute("CREATE TABLE ActorsTweet(user_id INT , movietitel TEXT, screen_name TEXT, favourites_count INTEGER, description TEXT)")
+cur.execute("CREATE TABLE ActorsTweet(user_id INT , screen_name TEXT, num_favs INTEGER, description TEXT)")
 
 ##### CLASS, FUNCTION SETUP CODE:
 
@@ -106,6 +106,9 @@ def lsttostr(lst):
 		string+=every
 	return string
 
+def makevalidtweetname(x):
+	return x.replace(" ", "")
+
 def replacespacewithplus(x): 
 	''' transform a space-connected string into a '+' connected string just to make easy searching movies. Assume string is valid'''
 	splitted= x.split()
@@ -128,22 +131,25 @@ def cacheomdbresponse(companylist, movielist, diction):  # diction should be a c
 	return 
 #cur.execute("INSERT OR IGNORE INTO Tweets (tweet_id, text, user_id, time_posted, retweets) VALUES (?, ?, ?, ?, ?)", (every_tweet['id'], every_tweet["text"], every_tweet["user"]["id"], every_tweet["created_at"], every_tweet["retweet_count"]))
 
-def dbcompanyloadresponse(companylist, dbcursor): #later change the company into the companylist
+def dbloadcompany(companylist, dbcursor): #later change the company into the companylist
 	for comps in companylist:
-		dbcursor.execute("DELETE FROM Company WHERE CompanyName = ?", (comps.CompanyName,))
+		statement= "DELETE FROM Company WHERE CompanyName = ?"
+		dbcursor.execute(statement, (comps.CompanyName,))
 		productionlist= list(comps.Movies.keys())
-		dbcursor.execute("INSERT INTO Company(CompanyName , Movielist , Actors ,  Website) VALUES(?, ?, ?, ?)", (comps.CompanyName, productionlist, comps.Actorslist, comps.Websiteurl))
+		statement= "INSERT INTO Company(CompanyName , Movielist , Actors) VALUES(?, ?, ?)"
+		dbcursor.execute(statement, (comps.CompanyName, str(productionlist), str(comps.Actorslist)))
 
 def dbloadmovies(movielist, dbcursor):
 	pass
 
-def dbloadactortweetresponse(response, dbcursor, diction):
-	Actorslist= response["Actors"].split(",")
-	for every in Actorslist:
-		if every.replace(" ","") not in diction:
-			result= api.get_user(every.replace(" ",""))
-			statement= "INSERT INTO ActorsTweet(user_id, screen_name, num_favs , description) VALUES(?, ?, ?, ?)"
-			dbcursor.execute(statement, (result['id'], result["screen_name"], result['favourites_count'], result['description']))
+def dbloadactortweetresponse(movlist, dbcursor, diction):
+	for every_movie in movlist:
+		for every_actor in every_movie.actors:
+			if every_actor.replace(" ","") not in diction:
+				result= api.get_user(every_actor.replace(" ",""))
+				statement= "INSERT INTO ActorsTweet(user_id, screen_name, num_favs , description) VALUES(?, ?, ?, ?)"
+				dbcursor.execute(statement, (result['id'], result["screen_name"], result['favourites_count'], result['description']))
+				diction[every_actor.replace(" ","")]= [result["id"], result["screen_name"], result['favourites_count'], result['description']]
 
 
 def interactive_data_access(complist, movlist, diction):
@@ -174,18 +180,6 @@ def interactive_data_access(complist, movlist, diction):
 		print ("Enter 'quit' to quit the program, as usual :D")
 		userinput_movie= input()
 
-def processactortweets(actorlist, diction):
-
-
-
-def dbloaddata(complist, movlist, dbcursor):
-	"""
-	"""
-
-	
-
-
-
 
 ################ END OF SETUP CODE
 ################ BEGIN IMPL CODE
@@ -193,11 +187,11 @@ companysearched= []
 moviessearched= []
 actorssearched= []
 interactive_data_access(companysearched, moviessearched, CACHE_DICTION)
-for every_movie in moviessearched:
-	actorssearched+= every_movie.actors
-processactortweets(actorssearched, CACHE_DICTION)
+dbloadactortweetresponse(moviessearched, cur, CACHE_DICTION)
+dbloadcompany(companysearched, cur)
 
-dbloaddata(companysearched, moviessearched, cur)
+
+#dbloaddata(companysearched, moviessearched, cur)
 
 # for x in list(CACHE_DICTION.values()): # every x should be in a ProductionCompany instance
 # 	dbcompanyloadresponse(x, cur)
