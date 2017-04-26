@@ -37,7 +37,7 @@ api = tweepy.API(auth, parser=tweepy.parsers.JSONParser())
 conn = sqlite3.connect('si206fp.db')
 cur = conn.cursor()
 cur.execute('DROP TABLE IF EXISTS Company')
-cur.execute("CREATE TABLE Company(CompanyName TEXT PRIMARY KEY, Movielist BLOB, Actors TEXT)")
+cur.execute("CREATE TABLE Company(CompanyName TEXT PRIMARY KEY, Movielist  TEXT, Actors TEXT, numMovies INTEGER, numActors INTEGER)")
 
 cur.execute('DROP TABLE IF EXISTS Movies')
 cur.execute("CREATE TABLE Movies(Title TEXT PRIMARY KEY, actors TEXT, year TEXT, language TEXT, ratings INTEGER, score INTEGER)")
@@ -55,19 +55,15 @@ class ProductionCompany():
 		self.Websiteurl= [omdbresponse["Website"]]
 	def NumActorsCooperated(self):
 		return len(self.Actorslist)
-	def NumMovies_in_year_(self, theuserinputyear):
-		if theuserinputyear in self.Movies:
-			return len(self.Movies[theuserinputyear])
-		else:
-			return 0
+	def NumMovies(self):
+		return len(self.Movies.keys())
 	def AddtoActorslist(self, newactorlist):
 		for newactor in newactorlist:
 			if newactor not in self.Actorslist:
 				self.Actorslist.extend(newactor)
-	def AddtoMovies(self, newmovieslist): # every item in the newmovieslist should be a tuple (year, title, actors)
-		for newmovie in newmovieslist:
-			if newmovie[1] not in self.Movies:
-				self.Movies[newmovie[1]]= {"Year": newmovie[0], "Actors": newmovie[2]}
+	def AddtoMovies(self, newmovie): # every item in the newmovieslist should be a tuple (year, title, actors)
+		if newmovie[1] not in self.Movies:
+			self.Movies[newmovie[1]]= {"Year": newmovie[0], "Actors": newmovie[2]}
 class MoviesInstance():  #Though the class might be somewhat confusing, it helps clearing my mind when coding.
 	def __init__(self, omdbresponse):
 		self.title= omdbresponse["Title"]
@@ -79,13 +75,19 @@ class MoviesInstance():  #Though the class might be somewhat confusing, it helps
 		self.director= omdbresponse["Director"]
 		self.language= omdbresponse["Language"]
 		self.country= omdbresponse["Country"]
-		self.score= int(omdbresponse["Metascore"])
-		self.imdbRating= float(omdbresponse["imdbRating"])
+		try:
+			self.score= int(omdbresponse["Metascore"]) 
+		except: 
+			self.score= 0
+		try:
+			self.imdbRating= float(omdbresponse["imdbRating"]) 
+		except: 
+			self.imdbRating= 0
 
 class CompanyEncoder(json.JSONEncoder):
 	def default(self, obj):
 		if isinstance(obj, ProductionCompany):
-			return [obj.Movies, obj.Actorslist, obj.Websiteurl]
+			return [obj.Movies, obj.Actorslist]
 		#Let the base class default method raise the TypeError
 		return json.JSONEncoder.default(self, obj)
 class MoviesEncoder(json.JSONEncoder):
@@ -136,20 +138,38 @@ def dbloadcompany(companylist, dbcursor): #later change the company into the com
 		statement= "DELETE FROM Company WHERE CompanyName = ?"
 		dbcursor.execute(statement, (comps.CompanyName,))
 		productionlist= list(comps.Movies.keys())
-		statement= "INSERT INTO Company(CompanyName , Movielist , Actors) VALUES(?, ?, ?)"
-		dbcursor.execute(statement, (comps.CompanyName, str(productionlist), str(comps.Actorslist)))
+		statement= "INSERT INTO Company(CompanyName , Movielist , Actors, numMovies, numActors) VALUES(?, ?, ?, ?, ?)"
+		dbcursor.execute(statement, (comps.CompanyName, str(productionlist), str(comps.Actorslist), comps.NumMovies(), comps.NumActorsCooperated()))
 
 def dbloadmovies(movielist, dbcursor):
-	pass
+	for movs in movielist:
+		statement= "INSERT INTO Movies(Title, actors, year, language, ratings, score) VALUES(?, ?, ?, ?, ?, ?)"
+		dbcursor.execute(statement, (movs.title, str(movs.actors), movs.year, movs.language, movs.imdbRating, movs.score))
 
-def dbloadactortweetresponse(movlist, dbcursor, diction):
+def dbloadactortweetresponse(complist, movlist, dbcursor, diction):
 	for every_movie in movlist:
 		for every_actor in every_movie.actors:
+			#print (every_actor.replace(" ",""))
 			if every_actor.replace(" ","") not in diction:
+				# try:
 				result= api.get_user(every_actor.replace(" ",""))
 				statement= "INSERT INTO ActorsTweet(user_id, screen_name, num_favs , description) VALUES(?, ?, ?, ?)"
 				dbcursor.execute(statement, (result['id'], result["screen_name"], result['favourites_count'], result['description']))
 				diction[every_actor.replace(" ","")]= [result["id"], result["screen_name"], result['favourites_count'], result['description']]
+				print (every_actor)
+				print ("yep")
+				# except:
+				# 	something= "a" # just dont want to use pass
+	for every_comp in complist:
+		try:
+			result= api.get_user(every_comp.CompanyName.replace(" ",""))
+			statement= "INSERT INTO ActorsTweet(user_id, screen_name, num_favs , description) VALUES(?, ?, ?, ?)"
+			dbcursor.execute(statement, (result['id'], result["screen_name"], result['favourites_count'], result['description']))
+			diction[every_actor.replace(" ","")]= [result["id"], result["screen_name"], result['favourites_count'], result['description']]
+		except :
+			pass 
+		
+				
 
 
 def interactive_data_access(complist, movlist, diction):
@@ -171,7 +191,8 @@ def interactive_data_access(complist, movlist, diction):
 		movlist.append(MoviesInstance(kk))
 		for x in complist:
 			if x.CompanyName== kk["Production"]:
-				x.AddtoMovies((kk["Year"], kk["Title"], kk["Actors"].split(",")))
+				print ("asdfasdf")
+				x.AddtoMovies([kk["Year"], kk["Title"], kk["Actors"].split(",")])
 		else:
 			complist.append(ProductionCompany(kk))
 		cacheomdbresponse(complist, movlist, diction)
@@ -187,8 +208,24 @@ companysearched= []
 moviessearched= []
 actorssearched= []
 interactive_data_access(companysearched, moviessearched, CACHE_DICTION)
-dbloadactortweetresponse(moviessearched, cur, CACHE_DICTION)
+dbloadactortweetresponse(companysearched, moviessearched, cur, CACHE_DICTION)
 dbloadcompany(companysearched, cur)
+dbloadmovies(moviessearched, cur)
+
+OUTPUT_FILE= "SI206FP_out.txt"
+hasoldmovie=""
+b= cur.execute("SELECT Company.CompanyName, Movies.Title FROM Company INNER JOIN Movies WHERE Movies.year < 2000")
+hasoldmovie+=b.fetchone()[0]
+hasoldstatement= "Production Company: "+ hasoldmovie+ "has produced a movie before year 2000"
+print (hasoldstatement)
+print (type(hasoldstatement))
+output= open(OUTPUT_FILE, 'w')
+output.write(str(hasoldstatement))
+high_rating_movies=[x for x in cur.execute("SELECT  Movies.Title FROM Movies  WHERE ratings > 7")]
+high_rating_statement= str(high_rating_movies), " has high ratings"
+output.write(str(high_rating_statement))
+
+
 
 
 #dbloaddata(companysearched, moviessearched, cur)
@@ -200,6 +237,7 @@ print (CACHE_DICTION)
 
 
 ##### CACHE AND DB CLOSING
+output.close()
 cache_file= open(CACHE_FNAME, 'w')
 cache_file.write(json.dumps(CACHE_DICTION))
 cache_file.close()
@@ -227,7 +265,7 @@ class CompanyTest(unittest.TestCase):
 		response= requests.get(url)
 		kk= json.loads(response.text)
 		a= ProductionCompany(kk)
-		self.assertEqual(type(list(a.Movies.values())[0]),type([1,2,3]))
+		self.assertEqual(type(list(a.Movies.values())[0]),type({}))
 	# def test_movie_instance_1(self):
 	# 	self.assertEqual(type(a.Movies[0]),type(Movie()))
 	def test_movie_instance_2(self):
@@ -238,7 +276,7 @@ class CompanyTest(unittest.TestCase):
 		response= requests.get(url)
 		kk= json.loads(response.text)
 		a= ProductionCompany(kk)
-		self.assertEqual(type(list(a.Movies.values())[0][0]),type("string"))
+		self.assertEqual(type(list(a.Movies.keys())[0]),type("string"))
 	def test_actor_list(self):
 		x= "star wars"
 		x= replacespacewithplus(x)
@@ -275,7 +313,7 @@ class CompanyTest(unittest.TestCase):
 		response= requests.get(url)
 		kk= json.loads(response.text)
 		a= ProductionCompany(kk)
-		the_num= a.NumMovies_in_year_("2001")
+		the_num= a.NumMovies()
 		self.assertEqual(type(the_num), int)
 
 
