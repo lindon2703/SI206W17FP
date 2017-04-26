@@ -156,8 +156,8 @@ def dbloadactortweetresponse(complist, movlist, dbcursor, diction):
 				statement= "INSERT INTO ActorsTweet(user_id, screen_name, num_favs , description) VALUES(?, ?, ?, ?)"
 				dbcursor.execute(statement, (result['id'], result["screen_name"], result['favourites_count'], result['description']))
 				diction[every_actor.replace(" ","")]= [result["id"], result["screen_name"], result['favourites_count'], result['description']]
-				print (every_actor)
-				print ("yep")
+				# print (every_actor)
+				# print ("yep")
 				# except:
 				# 	something= "a" # just dont want to use pass
 	for every_comp in complist:
@@ -191,7 +191,7 @@ def interactive_data_access(complist, movlist, diction):
 		movlist.append(MoviesInstance(kk))
 		for x in complist:
 			if x.CompanyName== kk["Production"]:
-				print ("asdfasdf")
+				#print ("asdfasdf")
 				x.AddtoMovies([kk["Year"], kk["Title"], kk["Actors"].split(",")])
 		else:
 			complist.append(ProductionCompany(kk))
@@ -217,13 +217,26 @@ hasoldmovie=""
 b= cur.execute("SELECT Company.CompanyName, Movies.Title FROM Company INNER JOIN Movies WHERE Movies.year < 2000")
 hasoldmovie+=b.fetchone()[0]
 hasoldstatement= "Production Company: "+ hasoldmovie+ "has produced a movie before year 2000"
-print (hasoldstatement)
-print (type(hasoldstatement))
 output= open(OUTPUT_FILE, 'w')
 output.write(str(hasoldstatement))
+output.write("\n")
 high_rating_movies=[x for x in cur.execute("SELECT  Movies.Title FROM Movies  WHERE ratings > 7")]
 high_rating_statement= str(high_rating_movies), " has high ratings"
 output.write(str(high_rating_statement))
+output.write("\n")
+b= cur.execute("SELECT * FROM Movies WHERE Movies.score > 60").fetchone()
+moviedict= {b[0]: b[1:]}
+output.write("Movies that have a ratings higher thatn 60: ")
+output.write(json.dumps(moviedict))
+output.write("\n")
+b= cur.execute("SELECT * FROM Movies").fetchall()
+moviedictha= {x[0]: x[1:] for x in b}
+output.write("Movies that have been searched: ")
+output.write(json.dumps(moviedictha))
+output.write("\n")
+
+
+
 
 
 
